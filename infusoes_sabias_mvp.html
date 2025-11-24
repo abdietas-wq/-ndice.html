@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Infusões Sábias - Guia de Chás</title>
+    <!-- Carrega Tailwind CSS para estilização responsiva -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0fdf4; /* Cor de fundo suave (verde muito claro) */
+        }
+        /* Estilos para o botão de Favoritos */
+        .favorite-btn {
+            transition: transform 0.1s ease-in-out, color 0.1s ease-in-out;
+        }
+        .favorite-btn:active {
+            transform: scale(0.95);
+        }
+        .is-favorite {
+            color: #f59e0b; /* Amarelo/Âmbar para favorito */
+        }
+    </style>
+</head>
+<body class="p-4 sm:p-6 md:p-8">
+    <div id="app" class="max-w-2xl mx-auto bg-white shadow-2xl rounded-2xl overflow-hidden">
+        <!-- Cabeçalho -->
+        <header class="bg-teal-700 p-6 text-white text-center rounded-t-2xl">
+            <h1 class="text-3xl font-extrabold mb-1">🌿 Infusões Sábias</h1>
+            <p class="text-teal-200 text-lg">O seu guia para 30 chás e os seus benefícios.</p>
+        </header>
+
+        <!-- Filtros e Controlo de Favoritos -->
+        <div class="p-4 sm:p-6 border-b border-gray-100 flex flex-col sm:flex-row justify-between items-center space-y-3 sm:space-y-0">
+            <input type="text" id="search-input" placeholder="Pesquisar por nome ou benefício..." class="w-full sm:w-2/3 p-3 border border-gray-300 rounded-lg focus:ring-teal-500 focus:border-teal-500 transition duration-150" oninput="renderInfusions()">
+            
+            <button id="filter-favorites-btn" class="w-full sm:w-1/3 sm:ml-4 p-3 font-semibold rounded-lg bg-yellow-100 text-yellow-800 border border-yellow-300 hover:bg-yellow-200 transition duration-150" onclick="toggleFavoriteFilter()">
+                Mostrar Favoritos (0)
+            </button>
+        </div>
+
+        <!-- Lista de Infusões -->
+        <main class="p-4 sm:p-6">
+            <div id="infusion-list" class="space-y-4">
+                <!-- As infusões serão adicionadas aqui pelo JavaScript -->
+            </div>
+            <p id="no-results-message" class="text-center text-gray-500 mt-8 hidden">Nenhum chá encontrado. Tente ajustar o filtro ou a pesquisa.</p>
+        </main>
+        
+        <!-- Mensagem de Rodapé -->
+        <footer class="p-4 text-center text-sm text-gray-500 border-t mt-6 bg-gray-50">
+            Protótipo MVP V1.0 - [30 Chás]
+        </footer>
+    </div>
+
+    <script>
+        // Variáveis globais
+        const storageKey = 'infusoes_favoritas';
+        let favorites = JSON.parse(localStorage.getItem(storageKey)) || {};
+        let isFilteringFavorites = false;
+        
+        // Dados de 30 infusões e chás
+        const allInfusions = [
+            { id: 1, name: "Camomila", benefit: "Calmante natural. Ideal para ansiedade e sono.", category: "Relaxamento", icon: "🌼" },
+            { id: 2, name: "Hortelã-Pimenta", benefit: "Excelente para digestão e alívio de náuseas.", category: "Digestão", icon: "🌱" },
+            { id: 3, name: "Gengibre e Limão", benefit: "Reforça o sistema imunitário e anti-inflamatório.", category: "Imunidade", icon: "🍋" },
+            { id: 4, name: "Chá Verde", benefit: "Antioxidante poderoso, aumenta o metabolismo e o foco.", category: "Energia", icon: "🍵" },
+            { id: 5, name: "Rooibos", benefit: "Sem cafeína. Ótimo para a pele e saúde óssea.", category: "Geral", icon: "🔴" },
+            { id: 6, name: "Lavanda", benefit: "Profundamente relaxante. Reduz o stress e melhora o humor.", category: "Relaxamento", icon: "💜" },
+            { id: 7, name: "Erva-Príncipe", benefit: "Ajuda na digestão, desintoxica e alivia dores de cabeça.", category: "Digestão", icon: "🌾" },
+            { id: 8, name: "Hibisco", benefit: "Rico em Vitamina C, ajuda a controlar a tensão arterial.", category: "Coração", icon: "🌺" },
+            { id: 9, name: "Chá Branco", benefit: "O chá menos processado, alto teor de antioxidantes.", category: "Geral", icon: "⚪" },
+            { id: 10, name: "Alecrim", benefit: "Melhora a memória, o foco e a circulação.", category: "Foco", icon: "🌲" },
+            { id: 11, name: "Boldo", benefit: "Protege o fígado e estimula a produção de bílis.", category: "Digestão", icon: "🍃" },
+            { id: 12, name: "Alfazema", benefit: "Alivia a tensão muscular e promove um sono reparador.", category: "Relaxamento", icon: "✨" },
+            { id: 13, name: "Valeriana", benefit: "Sedativo natural potente, para insónias crónicas.", category: "Sono", icon: "💤" },
+            { id: 14, name: "Equinácea", benefit: "Combate constipações e fortalece defesas.", category: "Imunidade", icon: "🛡️" },
+            { id: 15, name: "Carqueja", benefit: "Ajuda na desintoxicação e função renal.", category: "Desintoxicação", icon: "💧" },
+            { id: 16, name: "Sálvia", benefit: "Excelente para a saúde da mulher (menopausa e ciclos).", category: "Mulher", icon: "♀️" },
+            { id: 17, name: "Folha de Oliveira", benefit: "Poderoso antibiótico natural e regula a glicose.", category: "Saúde", icon: "🟢" },
+            { id: 18, name: "Cardamomo", benefit: "Aquece o corpo e auxilia na quebra de gorduras.", category: "Metabolismo", icon: "🌰" },
+            { id: 19, name: "Canela", benefit: "Regula o açúcar no sangue e é um ótimo digestivo.", category: "Saúde", icon: "🥢" },
+            { id: 20, name: "Dente-de-Leão", benefit: "Diurético e depurativo. Limpeza do fígado.", category: "Desintoxicação", icon: "🟡" },
+            { id: 21, name: "Mãe-e-Pai (Amora)", benefit: "Rico em Vitamina C e antioxidantes, bom para o coração.", category: "Geral", icon: "🍇" },
+            { id: 22, name: "Tília", benefit: "Reduz o nervosismo e espasmos. Suave e calmante.", category: "Relaxamento", icon: "🌳" },
+            { id: 23, name: "Urtiga", benefit: "Rica em minerais, fortalece o cabelo e unhas.", category: "Beleza", icon: "💅" },
+            { id: 24, name: "Funcho", benefit: "Alivia gases e inchaço, ótimo para cólicas.", category: "Digestão", icon: "🥖" },
+            { id: 25, name: "Alcaçuz", benefit: "Suaviza a garganta e tem propriedades antivirais.", category: "Imunidade", icon: "⚫" },
+            { id: 26, name: "Guaraná", benefit: "Estimulante natural, melhora a performance física e mental.", category: "Energia", icon: "⚡" },
+            { id: 27, name: "Poejo", benefit: "Trata problemas respiratórios e tosse.", category: "Respiratório", icon: "🌬️" },
+            { id: 28, name: "Anis Estrelado", benefit: "Antifúngico e ajuda na digestão. Sabor único.", category: "Digestão", icon: "⭐" },
+            { id: 29, name: "Passiflora", benefit: "Combate a insónia e a hiperatividade.", category: "Sono", icon: "🌙" },
+            { id: 30, name: "Chá Preto", benefit: "Alto teor de cafeína, ideal para começar o dia.", category: "Energia", icon: "☕" },
+        ];
+
+        // Função para guardar o estado dos favoritos
+        function saveFavorites() {
+            localStorage.setItem(storageKey, JSON.stringify(favorites));
+            updateFavoriteButton();
+        }
+
+        // Função para alternar o estado de um favorito
+        function toggleFavorite(id) {
+            const idStr = String(id);
+            if (favorites[idStr]) {
+                delete favorites[idStr];
+            } else {
+                favorites[idStr] = true;
+            }
+            saveFavorites();
+            renderInfusions();
+        }
+
+        // Função para atualizar o texto do botão de filtro de favoritos
+        function updateFavoriteButton() {
+            const count = Object.keys(favorites).length;
+            const btn = document.getElementById('filter-favorites-btn');
+            
+            btn.textContent = `Mostrar Favoritos (${count})`;
+
+            if (isFilteringFavorites) {
+                btn.classList.remove('bg-yellow-100', 'text-yellow-800');
+                btn.classList.add('bg-yellow-500', 'text-white', 'hover:bg-yellow-600');
+            } else {
+                btn.classList.remove('bg-yellow-500', 'text-white', 'hover:bg-yellow-600');
+                btn.classList.add('bg-yellow-100', 'text-yellow-800', 'hover:bg-yellow-200');
+            }
+        }
+
+        // Função para alternar o modo de filtro de favoritos
+        function toggleFavoriteFilter() {
+            isFilteringFavorites = !isFilteringFavorites;
+            renderInfusions();
+        }
+
+        // Função principal para renderizar e filtrar a lista
+        function renderInfusions() {
+            const listContainer = document.getElementById('infusion-list');
+            const searchInput = document.getElementById('search-input').value.toLowerCase();
+            const noResultsMessage = document.getElementById('no-results-message');
+            listContainer.innerHTML = ''; // Limpa a lista existente
+
+            // 1. Filtrar com base na pesquisa e nos favoritos
+            let filteredInfusions = allInfusions.filter(infusion => {
+                const nameMatch = infusion.name.toLowerCase().includes(searchInput);
+                const benefitMatch = infusion.benefit.toLowerCase().includes(searchInput);
+                const isFavorite = favorites[String(infusion.id)];
+
+                const searchPasses = nameMatch || benefitMatch;
+                
+                if (isFilteringFavorites) {
+                    return searchPasses && isFavorite;
+                } else {
+                    return searchPasses;
+                }
+            });
+
+            if (filteredInfusions.length === 0) {
+                noResultsMessage.classList.remove('hidden');
+            } else {
+                noResultsMessage.classList.add('hidden');
+            }
+
+            // 2. Renderizar os cartões
+            filteredInfusions.forEach(infusion => {
+                const isFavorite = favorites[String(infusion.id)];
+                
+                // Cria o cartão para cada infusão
+                const card = document.createElement('div');
+                card.className = 'flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-200 hover:border-teal-500 transition duration-300 ease-in-out';
+                
+                // Conteúdo (Ícone, Nome e Benefício)
+                const content = document.createElement('div');
+                content.className = 'flex items-start';
+                content.innerHTML = `
+                    <span class="text-3xl mr-4 flex-shrink-0">${infusion.icon}</span>
+                    <div>
+                        <h3 class="text-lg font-bold text-teal-700">${infusion.name}</h3>
+                        <p class="text-sm text-gray-600">${infusion.benefit}</p>
+                        <span class="inline-block mt-1 px-2 py-0.5 text-xs font-medium bg-teal-100 text-teal-800 rounded-full">${infusion.category}</span>
+                    </div>
+                `;
+
+                // Botão de Favorito
+                const favoriteButton = document.createElement('button');
+                favoriteButton.className = `favorite-btn text-2xl p-2 rounded-full transition-colors ${isFavorite ? 'is-favorite' : 'text-gray-300 hover:text-yellow-500'}`;
+                favoriteButton.innerHTML = isFavorite ? '★' : '☆'; // Estrela preenchida ou vazia
+                favoriteButton.setAttribute('aria-label', isFavorite ? 'Remover dos favoritos' : 'Adicionar aos favoritos');
+                favoriteButton.onclick = () => toggleFavorite(infusion.id);
+
+                card.appendChild(content);
+                card.appendChild(favoriteButton);
+                listContainer.appendChild(card);
+            });
+
+            // 3. Atualizar o botão de filtro
+            updateFavoriteButton();
+        }
+
+        // Inicia a aplicação e carrega os dados
+        window.onload = () => {
+            // Verifica se o browser suporta localStorage (necessário para os favoritos)
+            if (typeof(Storage) === "undefined") {
+                console.error("O navegador não suporta localStorage. Favoritos não funcionarão.");
+            }
+            renderInfusions();
+        };
+    </script>
+</body>
+</html>
+
