@@ -1,1 +1,809 @@
-<h1>Olá! Meu site está online!</h1>
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Infusões Sábias - Guia de Chás</title>
+    <!-- Carregamento do Tailwind CSS para um design moderno e responsivo -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Configuração da fonte Inter para melhor leitura -->
+    <style>
+        /* Paleta de cores moderna:
+           Emerald (Verde Natureza) para destaque
+           Beige/Creme suave para fundo
+           Um toque de Pêssego/Laranja suave para alertas
+        */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0fff4; /* Fundo muito suave, quase branco-verde */
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            min-height: 100vh;
+            padding-top: 20px;
+            padding-bottom: 50px;
+        }
+        /* Container principal com bordas suaves */
+        #app {
+            box-shadow: 0 15px 30px -5px rgba(16, 185, 129, 0.1); /* Sombra mais suave com toque de verde */
+        }
+        /* Efeito de carregamento mais visual */
+        .loading-spinner {
+            border: 4px solid #e0f2f1; /* Tailwind emerald-100 */
+            border-top: 4px solid #059669; /* Tailwind emerald-600 */
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Container principal que simula o ecrã de um telemóvel -->
+    <div id="app" class="w-full max-w-md bg-white rounded-3xl overflow-hidden">
+
+        <!-- Header Fixo -->
+        <header class="bg-gradient-to-r from-emerald-600 to-emerald-800 text-white p-5 shadow-xl flex justify-between items-center sticky top-0 z-10">
+            <h1 id="headerTitle" class="text-xl font-bold tracking-tight">Infusões Sábias</h1>
+            <!-- Botão de Voltar (escondido na lista principal) -->
+            <button id="backButton" class="hidden text-xl p-1 rounded-full hover:bg-white/20 transition" onclick="showListView()">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0.75 0.75 22.5 22.5" stroke-width="2.5" stroke="currentColor" class="w-6 h-6">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
+                </svg>
+            </button>
+            <div id="userIdDisplay" class="text-xs opacity-75"></div>
+        </header>
+
+        <!-- Ecrã de Lista (Biblioteca de Chás) -->
+        <div id="listView" class="p-5 space-y-5">
+            
+            <!-- Barra de Pesquisa e Filtro de Favoritos -->
+            <div class="flex items-center space-x-3">
+                <input type="text" id="searchInput" placeholder="Pesquisar chá ou benefício (ex: Sono, Digestão)"
+                       class="flex-grow p-4 border border-emerald-300 bg-emerald-50 rounded-xl focus:ring-emerald-500 focus:border-emerald-500 transition duration-150 shadow-inner placeholder-gray-500">
+                
+                <!-- Botão de Filtro de Favoritos -->
+                <button id="favoriteFilterBtn" class="p-3 rounded-xl transition duration-200 shadow-md flex-shrink-0 bg-white text-gray-500 border border-gray-300 hover:bg-gray-100" onclick="toggleFavoritesFilter()">
+                    <!-- Icone de Estrela -->
+                    <svg id="filterIcon" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M9.049 2.927c.3-.921 1.621-.921 1.922 0l2.074 6.398h6.766c.969 0 1.371 1.24.588 1.81l-5.517 4.015 2.074 6.398c.3.921-.755 1.688-1.54 1.11L10 18.23l-5.517 4.015c-.783.578-1.84-.19-1.54-1.11l2.074-6.398L1.68 11.135c-.783-.57-.38-1.81.588-1.81h6.766l2.074-6.398z" />
+                    </svg>
+                </button>
+            </div>
+
+
+            <!-- Lista de Chás Renderizada pelo JS -->
+            <div id="teaListContainer" class="space-y-4">
+                <div class="flex justify-center items-center py-10">
+                    <div class="loading-spinner"></div>
+                    <span class="ml-3 text-gray-500">A carregar chás...</span>
+                </div>
+            </div>
+            
+            <!-- Mensagem de Responsabilidade (Secção 4 do Plano) -->
+            <p class="text-xs text-center text-gray-500 pt-4 px-2">
+                *Aviso: Esta app não substitui o aconselhamento médico profissional. Consulte sempre um profissional de saúde.
+            </p>
+        </div>
+
+        <!-- Ecrã de Detalhes do Chá -->
+        <div id="detailView" class="hidden p-6 space-y-6">
+            <!-- Conteúdo detalhado será injetado aqui -->
+        </div>
+
+    </div>
+
+    <!-- Script de Inicialização e Lógica -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, onSnapshot, collection, query } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Variáveis Globais fornecidas pelo ambiente
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        let db;
+        let auth;
+        let userId = null;
+        let favoritesMap = {}; // Mapa para guardar o estado dos favoritos {teaId: boolean}
+        let chasData = []; // Lista de chás (será preenchida após o carregamento)
+        let isFilteringFavorites = false; // NOVO: Estado para filtrar apenas favoritos
+
+        // Dados de exemplo (AGORA COM 30 CHÁS)
+        const initialChasData = [
+            {
+                id: "camomila",
+                nome: "Camomila",
+                nomeCientifico: "Matricaria recutita",
+                beneficios: ["Relaxamento e Ansiedade", "Melhora do Sono", "Anti-inflamatório suave"],
+                preparacao: "Use 1 colher de sopa de flores secas por chávena. Infusão em água a 95°C por 5 a 10 minutos. Coe e beba.",
+                contraindicacoes: "Pode causar sonolência excessiva se combinado com sedativos. Risco de reação alérgica em pessoas sensíveis à família Asteraceae (margaridas).",
+                categorias: ["Sono", "Calmante", "Digestão", "Ansiedade"]
+            },
+            {
+                id: "hortela",
+                nome: "Hortelã-pimenta (Menta)",
+                nomeCientifico: "Mentha piperita",
+                beneficios: ["Alívio de Náuseas e Vómitos", "Melhora da Digestão (espasmos intestinais)", "Refrescante natural"],
+                preparacao: "Use 1 colher de chá de folhas frescas ou secas por chávena. Infusão em água a 100°C por 7 minutos.",
+                contraindicacoes: "Evitar em casos de refluxo gastroesofágico (pode relaxar o esfíncter). Não usar em crianças pequenas. Pode interagir com medicamentos antiácidos.",
+                categorias: ["Digestão", "Refrescante", "Náuseas"]
+            },
+            {
+                id: "gengibre",
+                nome: "Gengibre",
+                nomeCientifico: "Zingiber officinale",
+                beneficios: ["Anti-inflamatório potente", "Alívio de Náuseas e Enjoo de movimento", "Aumento da Imunidade"],
+                preparacao: "Ferva 1 cm de raiz fresca fatiada em 250ml de água por 10 minutos. Adicione limão e mel a gosto.",
+                contraindicacoes: "Pode aumentar o risco de hemorragias em doses elevadas (cuidado com anticoagulantes). Pode causar azia em pessoas sensíveis.",
+                categorias: ["Imunidade", "Anti-inflamatório", "Energizante", "Náuseas"]
+            },
+            {
+                id: "tilia",
+                nome: "Tília",
+                nomeCientifico: "Tilia europaea",
+                beneficios: ["Redução da Ansiedade e Tensão Nervosa", "Efeito Sedativo Leve", "Alívio de Sintomas de Constipação"],
+                preparacao: "Use 1 colher de sobremesa de flores secas por chávena. Infusão em água a 90°C por 5 minutos.",
+                contraindicacoes: "Uso prolongado em doses muito elevadas pode estar associado a danos cardíacos (embora raro). Não exceder a dose recomendada.",
+                categorias: ["Calmante", "Sono", "Constipações", "Ansiedade"]
+            },
+            {
+                id: "equinacea",
+                nome: "Equinácea",
+                nomeCientifico: "Echinacea purpurea",
+                beneficios: ["Estimula o Sistema Imunitário", "Ajuda a prevenir e reduzir a gravidade de constipações", "Propriedades antivirais"],
+                preparacao: "Use 1-2 gramas de raiz seca por chávena. Fervura lenta por 10-15 minutos ou infusão por 10 minutos.",
+                contraindicacoes: "Não usar em doenças autoimunes, tuberculose ou esclerose múltipla. Uso contínuo não recomendado (fazer pausas).",
+                categorias: ["Imunidade", "Constipações", "Antiviral"]
+            },
+            {
+                id: "ervaprincipes",
+                nome: "Erva-príncipe",
+                nomeCientifico: "Cymbopogon citratus",
+                beneficios: ["Facilita a Digestão e Combate o Inchaço", "Alivia a Dor de Cabeça e Enxaquecas", "Possui Efeito Calmante Leve"],
+                preparacao: "Use 1 colher de sopa de folhas frescas ou 1 colher de chá de folhas secas por chávena. Infusão em água a 95°C por 5-7 minutos. Coe.",
+                contraindicacoes: "Moderado em pessoas com pressão arterial baixa, pois pode ter um ligeiro efeito hipotensor.",
+                categorias: ["Digestão", "Calmante", "Dor", "Inchaço"]
+            },
+            {
+                id: "rooibos",
+                nome: "Rooibos",
+                nomeCientifico: "Aspalathus linearis",
+                beneficios: ["Rico em Antioxidantes (sem cafeína)", "Alívio de Cólicas e Problemas Digestivos", "Apoio à Saúde Óssea"],
+                preparacao: "Use 1 colher de chá por chávena. Infusão em água a 100°C por 5-10 minutos. Pode ser consumido com leite.",
+                contraindicacoes: "Geralmente seguro. Em doses muito elevadas, pode interagir com alguns tratamentos de quimioterapia (consultar médico).",
+                categorias: ["Antioxidante", "Digestão", "Sem Cafeína"]
+            },
+            {
+                id: "alecrim",
+                nome: "Alecrim",
+                nomeCientifico: "Salvia rosmarinus",
+                beneficios: ["Melhora da Concentração e Memória", "Efeito Estimulante e Revigorante", "Alívio de Dores Musculares"],
+                preparacao: "Use 1 raminho fresco ou 1 colher de chá de folhas secas por chávena. Infusão em água a 95°C por 5 minutos.",
+                contraindicacoes: "Evitar em grandes quantidades durante a gravidez. Pode aumentar a pressão arterial (usar com moderação em hipertensos).",
+                categorias: ["Energizante", "Concentração", "Anti-inflamatório", "Memória"]
+            },
+            {
+                id: "valeriana",
+                nome: "Valeriana",
+                nomeCientifico: "Valeriana officinalis",
+                beneficios: ["Sedativo Forte para Insónia", "Redução de Sintomas de Ansiedade e Stress", "Relaxamento Muscular"],
+                preparacao: "Use 1 colher de chá de raiz seca por chávena. Infusão em água a 80°C por 10-15 minutos (não ferver).",
+                contraindicacoes: "Não combinar com álcool, sedativos ou ansiolíticos. Evitar conduzir ou operar máquinas pesadas. Não usar a longo prazo sem aconselhamento médico.",
+                categorias: ["Sono", "Calmante", "Sedativo", "Ansiedade"]
+            },
+            {
+                id: "cardamomo",
+                nome: "Cardamomo",
+                nomeCientifico: "Elettaria cardamomum",
+                beneficios: ["Combate a Indigestão e Inchaço", "Melhora o Hálito e a Saúde Oral", "Propriedades Desintoxicantes"],
+                preparacao: "Esmague 2-3 vagens e infunda em água a 100°C por 10 minutos. Adicione um toque de gengibre para potenciar.",
+                contraindicacoes: "Pode ser contraindicado em casos de pedras na vesícula, pois pode estimular o fluxo biliar.",
+                categorias: ["Digestão", "Desintoxicação", "Especiaria", "Inchaço"]
+            },
+            // NOVOS 20 CHÁS ADICIONADOS
+            {
+                id: "funcho",
+                nome: "Funcho",
+                nomeCientifico: "Foeniculum vulgare",
+                beneficios: ["Reduz Gases e Cólicas (ótimo para bebés)", "Estimula a Produção de Leite Materno", "Diurético suave"],
+                preparacao: "Esmague 1 colher de chá de sementes. Infusão em água a 90°C por 10 minutos.",
+                contraindicacoes: "Pode interagir com a Ciprofloxacina (antibiótico). Evitar em excesso durante a gravidez.",
+                categorias: ["Digestão", "Amamentação", "Inchaço", "Diurético"]
+            },
+            {
+                id: "erva-cidreira",
+                nome: "Erva-cidreira",
+                nomeCientifico: "Melissa officinalis",
+                beneficios: ["Acalma o Sistema Nervoso", "Combate o Stress e Palpitações", "Efeito Antiviral (especialmente Herpes)"],
+                preparacao: "Use 1 colher de chá de folhas por chávena. Infusão em água a 90°C por 10-15 minutos.",
+                contraindicacoes: "Pode interferir na medicação da tiroide (evitar em casos de hipotiroidismo).",
+                categorias: ["Calmante", "Ansiedade", "Sono", "Antiviral"]
+            },
+            {
+                id: "hibisco",
+                nome: "Hibisco",
+                nomeCientifico: "Hibiscus sabdariffa",
+                beneficios: ["Regula a Pressão Arterial (Hipotensor)", "Rico em Vitamina C", "Diurético e Desintoxicante"],
+                preparacao: "Use 2 colheres de chá de cálices secos por chávena. Ferva 5 minutos para extrair melhor a cor e sabor.",
+                contraindicacoes: "Pode diminuir a pressão arterial drasticamente em combinação com medicamentos. Evitar durante a gravidez.",
+                categorias: ["Desintoxicação", "Diurético", "Pressão Arterial", "Antioxidante"]
+            },
+            {
+                id: "passiflora",
+                nome: "Passiflora",
+                nomeCientifico: "Passiflora incarnata",
+                beneficios: ["Sedativo Forte para Insónia e Ansiedade Severa", "Alívio de Dores Menstruais", "Relaxamento Profundo"],
+                preparacao: "Use 1 colher de chá de partes aéreas secas. Infusão em água a 95°C por 10 minutos.",
+                contraindicacoes: "Pode potenciar o efeito de medicamentos sedativos e álcool. Evitar operar máquinas pesadas.",
+                categorias: ["Sono", "Ansiedade", "Sedativo", "Dor"]
+            },
+            {
+                id: "choverde",
+                nome: "Chá Verde",
+                nomeCientifico: "Camellia sinensis",
+                beneficios: ["Alto teor de Antioxidantes (EGCG)", "Acelera o Metabolismo e Queima de Gordura", "Melhora o Foco (contém cafeína)"],
+                preparacao: "Use 1 colher de chá por chávena. Infusão em água a 80°C por 3 minutos (não mais, para não amargar).",
+                contraindicacoes: "A cafeína pode causar nervosismo e insónia. Evitar com o estômago vazio. Pode reduzir a absorção de ferro.",
+                categorias: ["Antioxidante", "Energizante", "Metabolismo", "Foco"]
+            },
+            {
+                id: "boldo",
+                nome: "Boldo",
+                nomeCientifico: "Peumus boldus",
+                beneficios: ["Proteção e Desintoxicação Hepática (Fígado)", "Estimula a Produção de Bile", "Alivia Má Disposição após refeições pesadas"],
+                preparacao: "Use 1 folha seca por chávena. Infusão em água a 95°C por 5 minutos.",
+                contraindicacoes: "Não usar em casos de obstrução da vesícula biliar. Evitar uso contínuo por mais de 4 semanas.",
+                categorias: ["Digestão", "Fígado", "Desintoxicação"]
+            },
+            {
+                id: "macela",
+                nome: "Macela (Camomila Romana)",
+                nomeCientifico: "Chamaemelum nobile",
+                beneficios: ["Anti-inflamatório Intestinal", "Alívio de Cólicas Menstruais", "Melhora do Apetite"],
+                preparacao: "Use 1 colher de chá de flores por chávena. Infusão em água a 95°C por 7 minutos.",
+                contraindicacoes: "Pode causar reações alérgicas em pessoas sensíveis à família das margaridas.",
+                categorias: ["Digestão", "Dor", "Anti-inflamatório"]
+            },
+            {
+                id: "hipericão",
+                nome: "Hipericão (Erva de S. João)",
+                nomeCientifico: "Hypericum perforatum",
+                beneficios: ["Tratamento de Depressão Leve a Moderada", "Melhora do Humor e Bem-Estar", "Apoio ao Sistema Nervoso"],
+                preparacao: "Use 1 colher de sopa de partes aéreas. Infusão em água a 95°C por 10 minutos.",
+                contraindicacoes: "**CRÍTICO:** Interage gravemente com imensos medicamentos (anticoncecionais, antidepressivos, anticoagulantes). **Consultar médico antes de usar.**",
+                categorias: ["Humor", "Ansiedade", "Sistema Nervoso"]
+            },
+            {
+                id: "canela",
+                nome: "Canela (do Ceilão)",
+                nomeCientifico: "Cinnamomum zeylanicum",
+                beneficios: ["Regulação da Glicemia (Açúcar no Sangue)", "Ação Termogénica e Aquecedora", "Propriedades Antibacterianas"],
+                preparacao: "Ferva 1 pau de canela em água por 15 minutos ou use 1 colher de chá de pó. Coe.",
+                contraindicacoes: "Usar Canela do Ceilão; a Canela Cássia (mais comum) contém cumarina, tóxica para o fígado em grandes quantidades.",
+                categorias: ["Metabolismo", "Termogénico", "Glicemia", "Especiaria"]
+            },
+            {
+                id: "urtiga",
+                nome: "Urtiga",
+                nomeCientifico: "Urtica dioica",
+                beneficios: ["Rica em Minerais e Vitaminas (ferro)", "Diurético Forte (bom para retenção de líquidos)", "Apoio na Saúde Capilar"],
+                preparacao: "Use 1 colher de sopa de folhas secas. Infusão em água a 95°C por 10 minutos.",
+                contraindicacoes: "Pode interagir com medicamentos para a pressão e diabetes. Consultar médico devido ao seu forte efeito diurético.",
+                categorias: ["Diurético", "Minerais", "Saúde Capilar", "Retenção de Líquidos"]
+            },
+            {
+                id: "dente-de-leão",
+                nome: "Dente-de-leão",
+                nomeCientifico: "Taraxacum officinale",
+                beneficios: ["Apoio à Função Hepática e Renal", "Diurético Natural", "Ajuda na Desintoxicação da Primavera"],
+                preparacao: "Use 1 colher de chá de folhas e/ou raízes secas. Infusão ou decocção (raiz) em água a 100°C por 10 minutos.",
+                contraindicacoes: "Não usar em casos de obstrução dos ductos biliares ou intestinal. Pode causar azia.",
+                categorias: ["Desintoxicação", "Diurético", "Fígado"]
+            },
+            {
+                id: "tomilho",
+                nome: "Tomilho",
+                nomeCientifico: "Thymus vulgaris",
+                beneficios: ["Antisséptico e Expectorante Forte", "Alívio de Tosse e Bronquite", "Combate Infeções Respiratórias"],
+                preparacao: "Use 1 colher de chá de folhas. Infusão em água a 95°C por 5 minutos, tapado para reter os óleos.",
+                contraindicacoes: "Evitar em doses elevadas durante a gravidez. Pode ter um ligeiro efeito estimulante da tiroide.",
+                categorias: ["Constipações", "Antiviral", "Imunidade", "Tosse"]
+            },
+            {
+                id: "sabugueiro",
+                nome: "Sabugueiro",
+                nomeCientifico: "Sambucus nigra",
+                beneficios: ["Apoio contra Gripes e Constipações", "Propriedades Sudoríficas (induz suor)", "Alivia Febre"],
+                preparacao: "Use 1 colher de chá de flores secas. Infusão em água a 95°C por 10 minutos.",
+                contraindicacoes: "As bagas cruas são tóxicas. Usar apenas as flores secas. Geralmente seguro nas doses recomendadas.",
+                categorias: ["Imunidade", "Constipações", "Febre"]
+            },
+            {
+                id: "anises",
+                nome: "Anis Estrelado",
+                nomeCientifico: "Illicium verum",
+                beneficios: ["Poderoso para Cólicas e Digestão", "Antifúngico e Antibacteriano", "Aroma e Sabor Doces"],
+                preparacao: "Use 1 ou 2 estrelas. Ferva em água por 5-10 minutos.",
+                contraindicacoes: "**CRÍTICO:** Nunca confundir com o Anis Estrelado Japonês (tóxico). Evitar em doses elevadas durante a gravidez.",
+                categorias: ["Digestão", "Cólicas", "Especiaria"]
+            },
+            {
+                id: "alfazema",
+                nome: "Alfazema (Lavanda)",
+                nomeCientifico: "Lavandula angustifolia",
+                beneficios: ["Sedativo para Ansiedade e Stress", "Melhora a Qualidade do Sono", "Alivia Tensão Muscular e Dores de Cabeça"],
+                preparacao: "Use um pequeno punhado de flores. Infusão em água a 90°C por 5 minutos. Não exceder a dose para evitar náuseas.",
+                contraindicacoes: "Em excesso pode causar sonolência. Geralmente seguro, mas pode potenciar sedativos.",
+                categorias: ["Sono", "Calmante", "Ansiedade", "Dor"]
+            },
+            {
+                id: "goji",
+                nome: "Bagas de Goji (Infusão)",
+                nomeCientifico: "Lycium barbarum",
+                beneficios: ["Rico em Antioxidantes e Vitaminas", "Apoio ao Sistema Imunitário", "Melhora a Visão"],
+                preparacao: "Use 1 colher de sopa de bagas. Infusão em água a 95°C por 10-15 minutos (as bagas ficam comestíveis).",
+                contraindicacoes: "Pode interagir com medicamentos anticoagulantes (Warfarina). Consultar médico.",
+                categorias: ["Antioxidante", "Imunidade", "Vitaminas"]
+            },
+            {
+                id: "stevia",
+                nome: "Stevia",
+                nomeCientifico: "Stevia rebaudiana",
+                beneficios: ["Adoçante Natural sem Calorias", "Pode ajudar a regular a Pressão Arterial", "Sabor Doce e Intenso"],
+                preparacao: "Use 1-2 folhas frescas ou uma pitada de folha seca. Infusão em água a 95°C com outros chás.",
+                contraindicacoes: "Geralmente seguro, mas o uso em excesso pode causar inchaço ou náuseas em algumas pessoas.",
+                categorias: ["Adoçante", "Metabolismo", "Sem Calorias"]
+            },
+            {
+                id: "alcaçuz",
+                nome: "Alcaçuz",
+                nomeCientifico: "Glycyrrhiza glabra",
+                beneficios: ["Alivia a Azia e Úlceras Gástricas", "Expectorante para Tosse", "Adoçante Natural"],
+                preparacao: "Use 1 colher de chá de raiz cortada. Ferva em água por 10-15 minutos.",
+                contraindicacoes: "**CRÍTICO:** Não usar em casos de hipertensão ou doenças renais graves, pois pode aumentar a pressão arterial.",
+                categorias: ["Digestão", "Tosse", "Adoçante", "Pressão Arterial"]
+            },
+            {
+                id: "framboesa",
+                nome: "Folha de Framboesa",
+                nomeCientifico: "Rubus idaeus",
+                beneficios: ["Tónico Uterino (Saúde da Mulher)", "Fortalece os Músculos Uterinos (Gravidez/Parto)", "Alivia Cólicas Menstruais"],
+                preparacao: "Use 1 colher de chá de folhas secas. Infusão em água a 95°C por 10 minutos.",
+                contraindicacoes: "Geralmente seguro. Consultar obstetra antes de usar durante a gravidez (normalmente recomendado no 3º trimestre).",
+                categorias: ["Saúde da Mulher", "Gravidez", "Dor", "Uterino"]
+            },
+            {
+                id: "rosamosqueta",
+                nome: "Rosa Mosqueta",
+                nomeCientifico: "Rosa canina",
+                beneficios: ["Extremamente Rico em Vitamina C", "Apoio ao Sistema Imunitário", "Ajuda na Saúde das Articulações"],
+                preparacao: "Use 2 colheres de chá de frutos secos. Ferva ou infunda em água a 100°C por 10 minutos.",
+                contraindicacoes: "Geralmente seguro. Certifique-se de que os pelos internos dos frutos são removidos.",
+                categorias: ["Imunidade", "Vitaminas", "Antioxidante"]
+            },
+            {
+                id: "bancha",
+                nome: "Bancha (Chá Japonês)",
+                nomeCientifico: "Camellia sinensis",
+                beneficios: ["Baixo teor de Cafeína (suave)", "Fácil de Digirir", "Propriedades Calmantes"],
+                preparacao: "Use 1 colher de chá. Infusão em água a 80°C por 30 segundos a 1 minuto.",
+                contraindicacoes: "Contém alguma cafeína, embora muito menos que o Chá Verde.",
+                categorias: ["Sem Cafeína (Baixo)", "Digestão", "Calmante"]
+            },
+            {
+                id: "gingkobiloba",
+                nome: "Ginkgo Biloba",
+                nomeCientifico: "Ginkgo biloba",
+                beneficios: ["Melhora a Circulação Sanguínea Cerebral", "Apoia a Memória e Foco", "Antioxidante"],
+                preparacao: "Use 1 colher de chá de folhas secas. Infusão em água a 95°C por 5-10 minutos.",
+                contraindicacoes: "**CRÍTICO:** Alto risco de interação com anticoagulantes e medicamentos para diabetes. Consultar médico.",
+                categorias: ["Memória", "Foco", "Antioxidante", "Circulação"]
+            },
+            {
+                id: "cravo",
+                nome: "Cravo da Índia",
+                nomeCientifico: "Syzygium aromaticum",
+                beneficios: ["Alivia a Dor de Dentes e Infeções Orais", "Potente Antibacteriano", "Melhora o Hálito"],
+                preparacao: "Use 2-3 cravos inteiros. Ferva em água por 10 minutos.",
+                contraindicacoes: "O óleo essencial é muito forte e deve ser usado com moderação. Evitar grandes doses durante a gravidez.",
+                categorias: ["Dor", "Antibacteriano", "Saúde Oral", "Especiaria"]
+            },
+            {
+                id: "cardomariano",
+                nome: "Cardo Mariano",
+                nomeCientifico: "Silybum marianum",
+                beneficios: ["Regeneração e Proteção das Células Hepáticas (Fígado)", "Desintoxicação Forte", "Apoio a Problemas de Vesícula"],
+                preparacao: "Use 1 colher de chá de sementes esmagadas. Infusão ou decocção (fervura) em água a 100°C por 15 minutos.",
+                contraindicacoes: "Pode ter um efeito laxante. Evitar em casos de alergia a plantas da família Asteraceae.",
+                categorias: ["Fígado", "Desintoxicação", "Digestão"]
+            },
+            {
+                id: "mirtilo",
+                nome: "Folha de Mirtilo",
+                nomeCientifico: "Vaccinium myrtillus",
+                beneficios: ["Melhora a Visão Noturna", "Ajuda a Regular a Glicemia (diabetes)", "Antioxidante poderoso"],
+                preparacao: "Use 1 colher de chá de folhas secas. Infusão em água a 95°C por 10 minutos.",
+                contraindicacoes: "Pode potenciar o efeito de medicamentos para diabetes, levando à hipoglicemia.",
+                categorias: ["Visão", "Glicemia", "Antioxidante"]
+            },
+            {
+                id: "verbena",
+                nome: "Lúcia-lima (Verbena Limão)",
+                nomeCientifico: "Aloysia citrodora",
+                beneficios: ["Apoia o Sono Repousante", "Alivia Espasmos Digestivos e Cólicas", "Aroma Cítrico Agradável"],
+                preparacao: "Use 1 colher de sopa de folhas frescas ou 1 colher de chá de secas. Infusão em água a 90°C por 5 minutos.",
+                contraindicacoes: "Geralmente segura, mas pode causar ligeira irritação gástrica em excesso.",
+                categorias: ["Sono", "Digestão", "Calmante"]
+            },
+            {
+                id: "rosas",
+                nome: "Pétalas de Rosa",
+                nomeCientifico: "Rosa centifolia",
+                beneficios: ["Rica em Vitamina C", "Alivia o Stress e Melhora o Humor", "Suavemente Laxante"],
+                preparacao: "Use 1 colher de chá de pétalas secas. Infusão em água a 95°C por 5 minutos.",
+                contraindicacoes: "Em grandes quantidades, pode causar um efeito laxante indesejado.",
+                categorias: ["Humor", "Antioxidante", "Digestão"]
+            },
+            {
+                id: "malva",
+                nome: "Malva",
+                nomeCientifico: "Malva sylvestris",
+                beneficios: ["Alivia a Tosse Seca e Irritação da Garganta", "Protege as Mucosas (Garganta e Estômago)", "Suavemente Laxante"],
+                preparacao: "Use 1 colher de chá de flores e folhas. Infusão em água a 90°C por 10 minutos.",
+                contraindicacoes: "Pode atrasar a absorção de outros medicamentos devido ao alto teor de mucilagens (tomar longe de outros medicamentos).",
+                categorias: ["Tosse", "Garganta", "Digestão"]
+            },
+            {
+                id: "chabranco",
+                nome: "Chá Branco",
+                nomeCientifico: "Camellia sinensis",
+                beneficios: ["Mais Antioxidantes (menos processado)", "Baixo Nível de Cafeína", "Apoio à Saúde da Pele"],
+                preparacao: "Use 1 colher de chá. Infusão em água a 75-80°C por 5-7 minutos.",
+                contraindicacoes: "Contém cafeína. Pode reduzir a absorção de ferro.",
+                categorias: ["Antioxidante", "Pele", "Sem Cafeína (Baixo)"]
+            },
+            {
+                id: "passas",
+                nome: "Chá de Passas de Uva",
+                nomeCientifico: "Vitis vinifera",
+                beneficios: ["Propriedades Antioxidantes", "Energizante Natural", "Suavemente Diurético"],
+                preparacao: "Ferva 1 colher de sopa de passas em 500ml de água por 15 minutos. Beba a água e coma as passas.",
+                contraindicacoes: "Alto teor de açúcar natural (moderado em diabéticos).",
+                categorias: ["Energizante", "Antioxidante", "Diurético"]
+            }
+        ];
+
+        // Referências aos elementos DOM
+        const appContainer = document.getElementById('app');
+        const listView = document.getElementById('listView');
+        const detailView = document.getElementById('detailView');
+        const teaListContainer = document.getElementById('teaListContainer');
+        const searchInput = document.getElementById('searchInput');
+        const headerTitle = document.getElementById('headerTitle');
+        const backButton = document.getElementById('backButton');
+        const userIdDisplay = document.getElementById('userIdDisplay');
+        
+        // NOVOS elementos de UI para o filtro
+        const favoriteFilterBtn = document.getElementById('favoriteFilterBtn');
+        const filterIcon = document.getElementById('filterIcon');
+
+        // --- Funções de UI ---
+
+        // Função para alternar para a vista de lista
+        function showListView() {
+            listView.classList.remove('hidden');
+            detailView.classList.add('hidden');
+            backButton.classList.add('hidden');
+            headerTitle.textContent = "Infusões Sábias";
+            // Não limpamos a pesquisa, mas re-filtramos se necessário
+            filterAndRenderTeas();
+        }
+
+        // Função para mostrar os detalhes de um chá
+        function showDetailView(tea) {
+            listView.classList.add('hidden');
+            detailView.classList.remove('hidden');
+            backButton.classList.remove('hidden');
+            headerTitle.textContent = tea.nome;
+            
+            const isFavorite = favoritesMap[tea.id] || false;
+            // Cores mais vivas para o botão de favoritos
+            const favoriteClass = isFavorite ? 'bg-red-500 text-white shadow-lg shadow-red-200' : 'bg-white text-emerald-600 border border-emerald-300 shadow-md hover:bg-emerald-50';
+            const favoriteIcon = isFavorite ? 
+                `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                    <path d="M9.049 2.927c.3-.921 1.621-.921 1.922 0l2.074 6.398h6.766c.969 0 1.371 1.24.588 1.81l-5.517 4.015 2.074 6.398c.3.921-.755 1.688-1.54 1.11L10 18.23l-5.517 4.015c-.783.578-1.84-.19-1.54-1.11l2.074-6.398L1.68 11.135c-.783-.57-.38-1.81.588-1.81h6.766l2.074-6.398z" />
+                 </svg>` :
+                `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+                </svg>`; // Usando um ícone de marcador simples
+            
+            const favoriteText = isFavorite ? 'Remover dos Favoritos' : 'Guardar nos Favoritos';
+
+            // Renderizar o conteúdo de detalhes
+            detailView.innerHTML = `
+                <h2 class="text-3xl font-extrabold text-emerald-700 mb-0">${tea.nome}</h2>
+                <p class="text-sm font-light italic text-gray-500 mb-4">${tea.nomeCientifico}</p>
+
+                <!-- Secção de Benefícios (Foco no Verde, mais natural) -->
+                <div class="bg-emerald-50 p-5 rounded-xl shadow-inner border border-emerald-200">
+                    <h3 class="text-xl font-bold text-emerald-800 mb-3 flex items-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944c-3.197 0-6.233.92-8.722 2.802a1.001 1.001 0 00.514 1.765l8.13 4.293 8.13-4.293a1.001 1.001 0 00.514-1.765z" />
+                        </svg>
+                        Benefícios Principais
+                    </h3>
+                    <ul class="list-disc list-inside space-y-2 text-gray-700 text-base">
+                        ${tea.beneficios.map(b => `<li class="font-medium">${b}</li>`).join('')}
+                    </ul>
+                </div>
+
+                <!-- Secção de Preparação (Foco no Amarelo/Laranja, calor) -->
+                <div class="bg-amber-50 p-5 rounded-xl shadow-inner border border-amber-200">
+                    <h3 class="text-xl font-bold text-amber-700 mb-3 flex items-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 10h4.764a2 2 0 011.838 1.189l-4.04 7.072A2 2 0 0114.764 20H3.236a2 2 0 01-1.838-1.189l4.04-7.072A2 2 0 019.236 8H14v2zm0 0l-4-4m4 4l4-4" />
+                        </svg>
+                        Como Preparar
+                    </h3>
+                    <p class="text-gray-700 font-medium">${tea.preparacao}</p>
+                </div>
+
+                <!-- Secção CRÍTICA de Contraindicações (Foco no Vermelho/Alerta) -->
+                <div class="bg-rose-100 p-5 rounded-xl shadow-lg border border-rose-400">
+                    <h3 class="text-xl font-bold text-rose-800 mb-3 flex items-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2 text-rose-500 animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.3 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                        ⚠️ Contraindicações e Segurança
+                    </h3>
+                    <p class="text-rose-800 font-semibold">${tea.contraindicacoes}</p>
+                </div>
+
+                <!-- Botão Favoritos -->
+                <div class="mt-6 text-center">
+                    <button id="favoriteBtn" data-tea-id="${tea.id}" class="font-bold py-3 px-8 rounded-full transition duration-300 ${favoriteClass}">
+                        <div class="flex items-center justify-center">
+                           ${favoriteIcon}
+                           <span id="favoriteText">${favoriteText}</span>
+                        </div>
+                    </button>
+                </div>
+            `;
+            // Adicionar listener de evento ao botão de favoritos
+            document.getElementById('favoriteBtn').addEventListener('click', () => {
+                toggleFavorite(tea.id);
+            });
+        }
+
+        // Função principal para renderizar a lista de chás
+        function renderTeaList(list) {
+            teaListContainer.innerHTML = ''; // Limpa a lista atual
+
+            if (list.length === 0) {
+                // Mensagem específica se o filtro de favoritos estiver ativo
+                const message = isFilteringFavorites ? 
+                    'Ainda não tem chás favoritos guardados. Clique no botão de estrela nos detalhes para guardar.' :
+                    `Nenhum chá encontrado para a pesquisa: "${searchInput.value}".`;
+
+                teaListContainer.innerHTML = `<p class="text-center text-gray-500 py-8">${message}</p>`;
+                return;
+            }
+
+            list.forEach(tea => {
+                const isFavorite = favoritesMap[tea.id] || false;
+                // Ícone de favorito no cartão da lista
+                const favoriteIndicator = isFavorite ? 
+                    '<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-red-500 ml-2 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor"><path d="M9.049 2.927c.3-.921 1.621-.921 1.922 0l2.074 6.398h6.766c.969 0 1.371 1.24.588 1.81l-5.517 4.015 2.074 6.398c.3.921-.755 1.688-1.54 1.11L10 18.23l-5.517 4.015c-.783.578-1.84-.19-1.54-1.11l2.074-6.398L1.68 11.135c-.783-.57-.38-1.81.588-1.81h6.766l2.074-6.398z" /></svg>' : 
+                    '<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-300 ml-2 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" /></svg>';
+
+                const card = document.createElement('div');
+                // Design do cartão mais proeminente e com sombra
+                card.className = 'bg-white p-5 rounded-xl shadow-lg border-b-4 border-emerald-400 cursor-pointer hover:bg-emerald-50 transition duration-200 transform hover:scale-[1.01]';
+                card.innerHTML = `
+                    <div class="flex justify-between items-start">
+                        <div class="flex-grow">
+                            <h3 class="text-xl font-bold text-emerald-800">${tea.nome}</h3>
+                            <p class="text-xs font-medium text-emerald-600 mt-0.5">${tea.categorias[0].toUpperCase()}</p>
+                        </div>
+                        <div class="flex items-center">
+                            ${favoriteIndicator}
+                            <!-- Ícone de seta para indicar que é clicável -->
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-400 ml-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" /></svg>
+                        </div>
+                    </div>
+                    <p class="text-sm text-gray-500 mt-2 line-clamp-2">${tea.beneficios.join(' • ')}</p>
+                `;
+                // Adiciona o evento de clique para mostrar os detalhes
+                card.addEventListener('click', () => showDetailView(tea));
+                teaListContainer.appendChild(card);
+            });
+        }
+        
+        // NOVO: Função para atualizar o botão de filtro (cor e sombra)
+        function updateFilterButtonUI() {
+            if (isFilteringFavorites) {
+                // Filtro ativo: Cor vermelha (favoritos)
+                favoriteFilterBtn.className = 'p-3 rounded-xl transition duration-200 shadow-xl flex-shrink-0 bg-red-500 text-white hover:bg-red-600';
+                filterIcon.classList.add('text-white');
+            } else {
+                // Filtro inativo: Cor neutra
+                favoriteFilterBtn.className = 'p-3 rounded-xl transition duration-200 shadow-md flex-shrink-0 bg-white text-gray-500 border border-gray-300 hover:bg-gray-100';
+                filterIcon.classList.remove('text-white');
+            }
+        }
+        
+        // NOVO: Lógica de Pesquisa e Filtro unificada
+        function filterAndRenderTeas() {
+            const query = searchInput.value.toLowerCase();
+            
+            let filteredChas = chasData.filter(tea => {
+                // 1. Filtro de pesquisa (Search Filter)
+                const matchesQuery = (
+                    tea.nome.toLowerCase().includes(query) ||
+                    tea.nomeCientifico.toLowerCase().includes(query) ||
+                    tea.beneficios.some(b => b.toLowerCase().includes(query)) ||
+                    tea.categorias.some(c => c.toLowerCase().includes(query))
+                );
+                
+                // 2. Filtro de favoritos (Favorites Filter)
+                const isFavorite = favoritesMap[tea.id] === true;
+                
+                if (isFilteringFavorites) {
+                    // Se estiver a filtrar favoritos, só mostra se for favorito E corresponder à pesquisa
+                    return isFavorite && matchesQuery;
+                } else {
+                    // Se não estiver a filtrar, só tem que corresponder à pesquisa
+                    return matchesQuery;
+                }
+            });
+            
+            renderTeaList(filteredChas);
+        }
+
+        // Lógica de Pesquisa
+        searchInput.addEventListener('keyup', filterAndRenderTeas);
+        
+        // NOVO: Função para alternar o filtro de favoritos
+        window.toggleFavoritesFilter = function() {
+            isFilteringFavorites = !isFilteringFavorites;
+            
+            // Atualiza o aspeto do botão
+            updateFilterButtonUI();
+            
+            // Aplica o novo filtro
+            filterAndRenderTeas();
+        }
+
+        // --- Lógica de Autenticação e Firestore (Base de Dados) ---
+
+        // Caminho da coleção de favoritos para o utilizador atual
+        const getFavoritesDocRef = (uid) => doc(db, `/artifacts/${appId}/users/${uid}/data/favorites/user_favorites`);
+        
+        // Alternar o estado de favorito e guardar no Firestore
+        async function toggleFavorite(teaId) {
+            if (!userId) {
+                console.error("Erro: Usuário não autenticado para salvar favoritos.");
+                return;
+            }
+            
+            const isCurrentlyFavorite = favoritesMap[teaId] || false;
+            const newFavoriteState = !isCurrentlyFavorite;
+
+            try {
+                // O Firestore usa um objeto no documento 'user_favorites' para guardar o estado dos favoritos
+                await setDoc(getFavoritesDocRef(userId), {
+                    [teaId]: newFavoriteState
+                }, { merge: true }); // Usamos merge: true para atualizar apenas este campo
+                
+                // A UI será atualizada automaticamente pelo listener onSnapshot
+            } catch (error) {
+                console.error("Erro ao alternar o favorito:", error);
+            }
+        }
+
+        // Listener em tempo real para carregar e manter os favoritos atualizados
+        function loadFavorites() {
+            if (!userId) {
+                console.error("Usuário não autenticado. Favoritos não carregados.");
+                return;
+            }
+
+            const docRef = getFavoritesDocRef(userId);
+            
+            // onSnapshot fornece atualizações em tempo real
+            onSnapshot(docRef, (docSnap) => {
+                if (docSnap.exists()) {
+                    // O documento existe, atualiza o mapa de favoritos
+                    // Filtra para manter apenas as entradas 'true'
+                    favoritesMap = Object.fromEntries(Object.entries(docSnap.data()).filter(([key, value]) => value === true));
+                    console.log("Favoritos carregados:", favoritesMap);
+                } else {
+                    // O documento não existe (primeira vez), reinicia o mapa
+                    favoritesMap = {};
+                    console.log("Nenhum favorito encontrado. Criando novo mapa.");
+                }
+                
+                // Re-renderizar a lista para refletir o novo estado (estrelas e filtro)
+                filterAndRenderTeas();
+                
+                // Se estiver na vista de detalhes, re-renderizar para atualizar o botão
+                if (!detailView.classList.contains('hidden')) {
+                    const currentTeaName = headerTitle.textContent;
+                    const currentTea = chasData.find(t => t.nome === currentTeaName);
+                    if (currentTea) {
+                        showDetailView(currentTea);
+                    }
+                }
+            }, (error) => {
+                console.error("Erro ao receber updates do Firestore:", error);
+            });
+        }
+
+        // Inicialização da aplicação
+        async function initializeApp() {
+            if (!firebaseConfig) {
+                console.error("Firebase Configuração não encontrada. A aplicação irá funcionar em modo estático.");
+                chasData = initialChasData;
+                filterAndRenderTeas();
+                return;
+            }
+
+            try {
+                // 1. Inicializar Firebase
+                const app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+                
+                // Ativar logs de debug (útil para ver o tráfego do Firestore)
+                setLogLevel('Debug');
+                
+                // 2. Autenticação
+                if (initialAuthToken) {
+                    await signInWithCustomToken(auth, initialAuthToken);
+                } else {
+                    await signInAnonymously(auth);
+                }
+                
+                // 3. Listener do estado de autenticação
+                onAuthStateChanged(auth, (user) => {
+                    if (user) {
+                        userId = user.uid;
+                        userIdDisplay.textContent = `ID: ${userId}`;
+                        console.log("Usuário autenticado:", userId);
+                        
+                        // 4. Carregar dados e favoritos
+                        chasData = initialChasData;
+                        loadFavorites(); // Inicia o listener de favoritos (que chama filterAndRenderTeas)
+                    } else {
+                        userId = null;
+                        userIdDisplay.textContent = "ID: Não Autenticado";
+                        chasData = initialChasData;
+                        filterAndRenderTeas(); // Renderiza a lista completa sem favoritos
+                    }
+                    // Garante que o estado do botão de filtro é consistente ao iniciar
+                    updateFilterButtonUI();
+                });
+
+            } catch (error) {
+                console.error("Erro fatal durante a inicialização do Firebase:", error);
+                chasData = initialChasData;
+                filterAndRenderTeas();
+            }
+        }
+
+        // Inicia a aplicação no carregamento da janela
+        window.onload = initializeApp;
+
+    </script>
+</body>
+</html>
+
